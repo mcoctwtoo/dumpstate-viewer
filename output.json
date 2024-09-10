@@ -1,0 +1,48 @@
+{
+  "providerName": "android.hardware.camera.provider.ICameraProvider/internal/0-0 (v2.0, remote)",
+  "noOfDevices": "11",
+  "devices": [
+    {
+      "device": "0",
+      "physicalCameras": [
+        {
+          "physicalCameraId": "5"
+        },
+        {
+          "physicalCameraId": "6"
+        }
+      ],
+      "physicalCameraCount": 2
+    },
+    {
+      "device": "1"
+    },
+    {
+      "device": "2"
+    },
+    {
+      "device": "3"
+    },
+    {
+      "device": "4"
+    },
+    {
+      "device": "20"
+    },
+    {
+      "device": "21"
+    },
+    {
+      "device": "23"
+    },
+    {
+      "device": "52"
+    },
+    {
+      "device": "56"
+    },
+    {
+      "device": "58"
+    }
+  ]
+}
