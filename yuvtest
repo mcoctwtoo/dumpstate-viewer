@@ -1,0 +1,171 @@
+To handle a YUV file (instead of PPM) and calculate the distance of each layer from a base layer (e.g., background or the first detected layer), you'll need to:
+Read and Parse YUV file: YUV format stores luminance (Y) and chrominance (U, V) values separately. You'll need to read and convert them into a workable format.
+Detect Layers: Use a method similar to flood fill to detect regions of similar YUV values.
+Distance Between Layers: After detecting the layers, the distance between two layers can be computed by calculating the difference in YUV values or their relative spatial position.
+
+Approach:
+Reading a YUV file:
+
+YUV files typically store luminance and chrominance information.
+For YUV 4:2:0 format (most common), the file stores Y (luminance) for every pixel, but U and V (chrominance) values are downsampled.
+You'll need to extract Y, U, and V planes, then upsample U and V if necessary.
+Detect Layers:
+
+Group pixels based on similarity in YUV values.
+Similar to the PPM solution, apply a flood fill or connected-component labeling technique.
+Distance Calculation:
+
+You can compute distances based on color similarity (YUV difference).
+Alternatively, compute spatial distance between the centroids of layers to calculate how far one layer is from another spatially.
+Example Code:
+Below is an outline of how to read a YUV file and calculate layer distances.
+
+Step 1: Read and Parse YUV File
+
+
+#include <iostream>
+#include <vector>
+#include <cmath>
+#include <queue>
+
+using namespace std;
+
+// Structure to hold YUV data for each pixel
+struct YUV {
+    int y, u, v;
+};
+
+// Function to read YUV file (YUV 4:2:0 format for simplicity)
+bool readYUV(const string& filename, vector<vector<YUV>>& image, int width, int height) {
+    ifstream file(filename, ios::binary);
+    if (!file) {
+        cerr << "Error opening file." << endl;
+        return false;
+    }
+
+    int imageSize = width * height;
+    int chromaSize = (width / 2) * (height / 2);
+
+    vector<unsigned char> Y(imageSize), U(chromaSize), V(chromaSize);
+    
+    // Read Y, U, and V planes
+    file.read(reinterpret_cast<char*>(Y.data()), imageSize);
+    file.read(reinterpret_cast<char*>(U.data()), chromaSize);
+    file.read(reinterpret_cast<char*>(V.data()), chromaSize);
+
+    image.resize(height, vector<YUV>(width));
+
+    // Fill YUV data (Upsample U, V for YUV 4:2:0)
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            int uvIndex = (y / 2) * (width / 2) + (x / 2);
+            image[y][x] = {Y[y * width + x], U[uvIndex], V[uvIndex]};
+        }
+    }
+
+    return true;
+}
+
+// Calculate difference between two YUV pixels
+int yuvDifference(const YUV& p1, const YUV& p2) {
+    return abs(p1.y - p2.y) + abs(p1.u - p2.u) + abs(p1.v - p2.v);
+}
+
+Step 2: Detect Layers (Flood Fill)
+The flood fill algorithm groups similar regions by color. You can adjust the color difference tolerance to find different layers.
+
+void floodFill(const vector<vector<YUV>>& image, vector<vector<int>>& layerMap, int x, int y, int currentLayer, int tolerance) {
+    int height = image.size();
+    int width = image[0].size();
+    queue<pair<int, int>> q;
+    YUV target = image[y][x];
+    q.push({x, y});
+    layerMap[y][x] = currentLayer;
+
+    const int dx[] = {1, -1, 0, 0};
+    const int dy[] = {0, 0, 1, -1};
+
+    while (!q.empty()) {
+        auto [cx, cy] = q.front();
+        q.pop();
+
+        for (int i = 0; i < 4; i++) {
+            int nx = cx + dx[i];
+            int ny = cy + dy[i];
+
+            if (nx >= 0 && nx < width && ny >= 0 && ny < height && layerMap[ny][nx] == -1) {
+                if (yuvDifference(image[ny][nx], target) <= tolerance) {
+                    layerMap[ny][nx] = currentLayer;
+                    q.push({nx, ny});
+                }
+            }
+        }
+    }
+}
+
+Step 3: Calculate Distance Between Layers
+You can compute the color difference between layers using the average YUV values or compute the Euclidean distance between the centroids of the layers.
+
+// Calculate centroid of a layer
+pair<double, double> calculateCentroid(const vector<vector<int>>& layerMap, int layer, int width, int height) {
+    double sumX = 0, sumY = 0;
+    int count = 0;
+
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            if (layerMap[y][x] == layer) {
+                sumX += x;
+                sumY += y;
+                count++;
+            }
+        }
+    }
+
+    return {sumX / count, sumY / count};  // Returns centroid (x, y)
+}
+
+// Calculate Euclidean distance between centroids
+double calculateDistanceBetweenLayers(const vector<vector<int>>& layerMap, int layer1, int layer2, int width, int height) {
+    auto [x1, y1] = calculateCentroid(layerMap, layer1, width, height);
+    auto [x2, y2] = calculateCentroid(layerMap, layer2, width, height);
+
+    return sqrt(pow(x2 - x1, 2) + pow(y2 - y1, 2));
+}
+
+Step 4: Main Function to Run Detection and Distance Calculation
+
+int main() {
+    int width = 640, height = 480;  // Assuming 640x480 resolution YUV file
+    vector<vector<YUV>> image;
+    
+    if (!readYUV("input.yuv", image, width, height)) {
+        return 1;
+    }
+
+    int tolerance = 30;  // YUV color difference tolerance
+    vector<vector<int>> layerMap(height, vector<int>(width, -1));
+    int currentLayer = 0;
+
+    // Detect layers
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            if (layerMap[y][x] == -1) {  // Not yet labeled
+                floodFill(image, layerMap, x, y, currentLayer, tolerance);
+                currentLayer++;
+            }
+        }
+    }
+
+    cout << "Detected " << currentLayer << " layers." << endl;
+
+    // Example: Calculate distance between layers 0 and 1
+    double distance = calculateDistanceBetweenLayers(layerMap, 0, 1, width, height);
+    cout << "Distance between layer 0 and 1: " << distance << endl;
+
+    return 0;
+}
+Summary:
+Read YUV File: Parse the YUV 4:2:0 format.
+Flood Fill for Layer Detection: Use flood fill to detect regions of similar YUV values.
+Layer Distance Calculation: Calculate distance between centroids of layers spatially or based on color similarity.
+This code will help you read a YUV file, detect layers, and compute distances between them.
